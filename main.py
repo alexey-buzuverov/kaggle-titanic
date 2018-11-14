@@ -12,6 +12,7 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.model_selection import StratifiedKFold
 from sklearn.model_selection import KFold
 from sklearn.model_selection import cross_val_score
+from sklearn.preprocessing import StandardScaler
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -89,7 +90,7 @@ for label, value in name_counts_SibSp.items():
        (entries.shape[0] == 1 and entries['Title'].values[0] == 'Mrs'):
             Pas_wSib.extend(entries['PassengerId'].values.tolist())
     else:
-        Pas_wSib.extend( \
+        Pas_wSib.extend(
             entries[(entries['Title'] == 'Miss')|(entries['GrSize'] == 1)]['PassengerId'].values.tolist())
 
 # Search for Mrs-es with parents
@@ -152,95 +153,43 @@ all_df.loc[all_df['PassengerId'] == 1231,'Age'] = \
 all_df['Embarked'].fillna(all_df['Embarked'].value_counts().index[0], inplace=True)
 
 # Select and convert categorial features into numerical ones
-featr = ['PassengerId','Survived','Age','PerFare',\
-         'Ch12','Ch3','Fem12','Fem3wCh','Fem3r','Male1wSp','Male1r','Male2','Male3isAlwSib','Male3r']
+all_df['Sex'] = all_df['Sex'].map( {'male': 0, 'female': 1} ).astype(int)
+all_df[['Age','PerFare']] = all_df[['Age','PerFare']].astype(int)
+all_df_dummies =  pd.get_dummies(all_df, columns = ['Title','Pclass','Embarked'], prefix=['Title','Pclass','Embarked'])
 
-def get_category(row):
-    category = pd.Series(0, index = featr)
-    category['PassengerId'] = row['PassengerId']
-    if not pd.isnull(row['Survived']):
-        category['Survived'] = row['Survived']
-    if row['Pclass'] == 1:
-         category['PerFare'] = int(row['PerFare'])
-         category['Age'] = 0
-    elif row['Pclass'] == 3:
-         category['PerFare'] = 0
-         category['Age'] = int(row['Age'])
+featr_drop = ['Fname','Name','Deck','Cabin','Ticket','Fare','SibSp','Parch','FamSize','GrSize']
+all_df_dummies = all_df_dummies.drop(featr_drop, axis = 1)
 
-    if (row['Title'] == 'Master' or (row['Title'] == 'Miss' and row['wPar'] == 1)):
-        if row['Pclass'] in [1,2]:
-            category['Ch12'] = 1
-        else:
-            category['Ch3'] = 1
-    else:
-        if row['Sex'] == 'female':
-            if row['Pclass'] in [1,2]:
-                category['Fem12'] = 1
-            else:
-                if row['wCh'] == 1:
-                    category['Fem3wCh'] = 1
-                else:
-                    category['Fem3r'] = 1
-        else:
-            if row['Pclass'] == 1:
-                if row['wSp'] == 1:
-                    category['Male1wSp'] = 1
-                else:
-                    category['Male1r'] = 1
-            elif row['Pclass'] == 2:
-                category['Male2'] = 1
-            else:
-                if row['isAlone'] == 1 or row['wSib'] == 1:
-                    category['Male3isAlwSib'] = 1
-                else:
-                    category['Male3r'] = 1
+# Form train and test sets
+X_train = all_df_dummies.iloc[:891,:].drop(['PassengerId','Survived'], axis = 1)
+y_train = all_df_dummies.iloc[:891,:]['Survived']
+X_test = all_df_dummies.iloc[891:,:].drop(['PassengerId','Survived'], axis = 1)
+X_test_Id = all_df_dummies.iloc[891:,:]['PassengerId']
 
-    return category
-
-cat_df_train = all_df.iloc[:891,:].apply(lambda s: get_category(s) ,axis = 1)
-cat_df_test = all_df.iloc[891:,:].apply(lambda s: get_category(s) ,axis = 1)
-
-# Apply Logistic regression to each category
-pred_df_test = pd.DataFrame( {"PassengerId": test_df["PassengerId"], "Survived": 0} )
-score = 0
-for cat in ['Ch12','Ch3','Fem12','Fem3wCh','Fem3r','Male1wSp','Male1r','Male2','Male3isAlwSib','Male3r']:
-    X_train = cat_df_train[cat_df_train[cat] == 1][['Age','PerFare']]
-    X_test = cat_df_test[cat_df_test[cat] == 1][['PassengerId', 'Age', 'PerFare']]
-    X_test_id = X_test['PassengerId'].values
-    X_test = X_test.drop('PassengerId', axis = 1)
-    if (X_train['Age'] == 0).all():
-        X_train = X_train.drop('Age', axis = 1)
-        X_test = X_test.drop('Age', axis=1)
-    elif (X_train['PerFare'] == 0).all():
-        X_train = X_train.drop('PerFare', axis=1)
-        X_test = X_test.drop('PerFare', axis=1)
-    y_train = cat_df_train[cat_df_train[cat] == 1]['Survived']
-    alg_svm = SVC()
-    alg_svm.fit(X_train, y_train)
-    pred_train = alg_svm.predict(X_train)
-    pred_test = alg_svm.predict(X_test)
-    score = score + metrics.accuracy_score(y_train, pred_train)
-    sub_test = pd.DataFrame({"PassengerId": X_test_id, "Survived": pred_test})
-    pred_df_test['Survived'] = \
-        pred_df_test.apply(lambda s: sub_test[sub_test['PassengerId'] == s['PassengerId']]['Survived'].values[0] \
-        if s['PassengerId'] in X_test_id else s['Survived'], axis = 1)
-
-print(score/10)
-
-# Submission
-pred_df_test.to_csv('submission.csv', index=False)
+# Perform scaling
+scaler = StandardScaler()
+scaler.fit(X_train[['Age','PerFare']])
+X_train[['Age','PerFare']] = scaler.transform(X_train[['Age','PerFare']])
+X_test[['Age','PerFare']] = scaler.transform(X_test[['Age','PerFare']])
 
 # Cross-validation parameters
-# cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=1)
+cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=1,)
 
-# Random Forest classifier
-# alg_tree = DecisionTreeClassifier()
+# Support Vector Classifier score
+alg_svm = SVC(C=1.0)
+scores = cross_val_score(alg_svm, X_train, y_train, cv=cv)
+print("Accuracy (SVM): {}/{}".format(scores.mean(), scores.std()))
 
-# Submission
-# alg_tree.fit(cat_df_train, train_df['Survived'])
-# print(alg_tree.score(cat_df_train, train_df['Survived']))
+# Fit, predict and generate submission
+alg_svm.fit(X_train, y_train)
+predictions = alg_svm.predict(X_test)
 
-# predictions = alg_tree.predict(cat_df_test)
+submission = pd.DataFrame({
+    "PassengerId": X_test_Id,
+    "Survived": predictions.astype(int)
+})
+
+submission.to_csv("titanic-submission.csv", index=False)
 
 # Test routine
 # g = sns.FacetGrid(all_df[all_df['FamSize'] == 2], col='Parch')
