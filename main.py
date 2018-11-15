@@ -10,8 +10,10 @@ from sklearn.svm import SVC
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import RepeatedStratifiedKFold
 from sklearn.model_selection import KFold
 from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import GridSearchCV
 from sklearn.preprocessing import StandardScaler
 import numpy as np
 import matplotlib.pyplot as plt
@@ -155,9 +157,11 @@ all_df['Embarked'].fillna(all_df['Embarked'].value_counts().index[0], inplace=Tr
 # Select and convert categorial features into numerical ones
 all_df['Sex'] = all_df['Sex'].map( {'male': 0, 'female': 1} ).astype(int)
 all_df[['Age','PerFare']] = all_df[['Age','PerFare']].astype(int)
-all_df_dummies =  pd.get_dummies(all_df, columns = ['Title','Pclass','Embarked'], prefix=['Title','Pclass','Embarked'])
+all_df['FamSize'] = pd.cut(all_df['FamSize'], bins=[0,4,11], labels = False).astype(int)
+all_df_dummies =  pd.get_dummies(all_df, columns = ['Title','Pclass','FamSize','Embarked'],\
+                                 prefix=['Title','Pclass','FamSize','Embarked'])
 
-featr_drop = ['Fname','Name','Deck','Cabin','Ticket','Fare','SibSp','Parch','FamSize','GrSize']
+featr_drop = ['Fname','Name','Deck','Cabin','Ticket','Fare','SibSp','Parch','GrSize']
 all_df_dummies = all_df_dummies.drop(featr_drop, axis = 1)
 
 # Form train and test sets
@@ -173,22 +177,23 @@ X_train[['Age','PerFare']] = scaler.transform(X_train[['Age','PerFare']])
 X_test[['Age','PerFare']] = scaler.transform(X_test[['Age','PerFare']])
 
 # Cross-validation parameters
-cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=1,)
+cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=10, random_state=1)
 
 # Support Vector Classifier score
-alg_svm = SVC(C=1.0)
-scores = cross_val_score(alg_svm, X_train, y_train, cv=cv)
-print("Accuracy (SVM): {}/{}".format(scores.mean(), scores.std()))
+alg_svm = SVC()
+param_grid = {'C':[1,2,3,4,5,6,7,8,9,10]}
+alg_svm_grid = GridSearchCV(alg_svm, param_grid=param_grid, cv = cv, refit=True, n_jobs=1)
+alg_svm_grid.fit(X_train, y_train)
+alg_svm_best = alg_svm_grid.best_estimator_
+print("Accuracy: {} with params {}"
+      .format(alg_svm_grid.best_score_, alg_svm_grid.best_params_))
 
 # Fit, predict and generate submission
-alg_svm.fit(X_train, y_train)
-predictions = alg_svm.predict(X_test)
-
+predictions = alg_svm_best.predict(X_test)
 submission = pd.DataFrame({
     "PassengerId": X_test_Id,
     "Survived": predictions.astype(int)
 })
-
 submission.to_csv("titanic-submission.csv", index=False)
 
 # Test routine
