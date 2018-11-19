@@ -3,18 +3,15 @@
 import pandas as pd
 import xgboost as xgb
 from sklearn import metrics
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.base import TransformerMixin
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.model_selection import StratifiedKFold
-from sklearn.model_selection import RepeatedStratifiedKFold
-from sklearn.model_selection import KFold
-from sklearn.model_selection import cross_val_score
-from sklearn.model_selection import GridSearchCV
-from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import StratifiedKFold, RepeatedStratifiedKFold, KFold, cross_val_score, GridSearchCV
+from sklearn.feature_selection import SelectKBest, f_classif
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -161,7 +158,7 @@ all_df['FamSize'] = pd.cut(all_df['FamSize'], bins=[0,4,11], labels = False).ast
 all_df_dummies =  pd.get_dummies(all_df, columns = ['Title','Pclass','FamSize','Embarked'],\
                                  prefix=['Title','Pclass','FamSize','Embarked'])
 
-featr_drop = ['Fname','Name','Deck','Cabin','Ticket','Fare','SibSp','Parch','GrSize']
+featr_drop = ['Sex','Fname','Name','Deck','Cabin','Ticket','Fare','SibSp','Parch','GrSize']
 all_df_dummies = all_df_dummies.drop(featr_drop, axis = 1)
 
 # Form train and test sets
@@ -169,6 +166,7 @@ X_train = all_df_dummies.iloc[:891,:].drop(['PassengerId','Survived'], axis = 1)
 y_train = all_df_dummies.iloc[:891,:]['Survived']
 X_test = all_df_dummies.iloc[891:,:].drop(['PassengerId','Survived'], axis = 1)
 X_test_Id = all_df_dummies.iloc[891:,:]['PassengerId']
+# X_train.to_csv('train.csv')
 
 # Perform scaling
 scaler = StandardScaler()
@@ -176,20 +174,37 @@ scaler.fit(X_train[['Age','PerFare']])
 X_train[['Age','PerFare']] = scaler.transform(X_train[['Age','PerFare']])
 X_test[['Age','PerFare']] = scaler.transform(X_test[['Age','PerFare']])
 
+# Feature importance
+# selector = SelectKBest(f_classif, k=10)
+# selector.fit(X_train, y_train)
+# scores = -np.log10(selector.pvalues_)
+# predictors = list(X_train.columns.values)
+# plt.bar(range(len(predictors)), scores)
+# plt.xticks(range(len(predictors)), predictors, rotation='vertical')
+# plt.show()
+
 # Cross-validation parameters
 cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=10, random_state=1)
 
-# Support Vector Classifier score
-alg_svm = SVC()
-param_grid = {'C':[1,2,3,4,5,6,7,8,9,10]}
-alg_svm_grid = GridSearchCV(alg_svm, param_grid=param_grid, cv = cv, refit=True, n_jobs=1)
-alg_svm_grid.fit(X_train, y_train)
-alg_svm_best = alg_svm_grid.best_estimator_
-print("Accuracy: {} with params {}"
-      .format(alg_svm_grid.best_score_, alg_svm_grid.best_params_))
+# Support Vector Classifier
+svm_grid = {'C': list(range(1,10))}
+svm_search = GridSearchCV(estimator = SVC(), param_grid = svm_grid, scoring = 'roc_auc',
+               cv = cv, refit=True, n_jobs=1)
+# svm_search.fit(X_train, y_train)
+# svm_best = svm_search.best_estimator_
+# print("Accuracy: {} with params {}".format(svm_search.best_score_, svm_search.best_params_))
+
+# K-nearest Neighbors
+knn_grid = {'algorithm': ['auto'], 'weights': ['uniform', 'distance'], 'leaf_size': list(range(1,50,5)),
+               'metric': ['minkowski'], 'n_neighbors': list(range(2,6))}
+knn_search = GridSearchCV(estimator = KNeighborsClassifier(), param_grid = knn_grid, scoring = 'roc_auc',
+                cv=cv, refit=True, n_jobs=1)
+knn_search.fit(X_train, y_train)
+knn_best = knn_search.best_estimator_
+print("Accuracy: {} with params {}".format(knn_search.best_score_, knn_search.best_params_))
 
 # Fit, predict and generate submission
-predictions = alg_svm_best.predict(X_test)
+predictions = knn_best.predict(X_test)
 submission = pd.DataFrame({
     "PassengerId": X_test_Id,
     "Survived": predictions.astype(int)
