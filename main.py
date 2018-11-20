@@ -151,6 +151,10 @@ all_df.loc[all_df['PassengerId'] == 1231,'Age'] = \
 # Fill Embarked
 all_df['Embarked'].fillna(all_df['Embarked'].value_counts().index[0], inplace=True)
 
+# Form train and test sets
+df_train = all_df.iloc[:891,:]
+df_test = all_df.iloc[891:,:]
+
 # Select and convert categorial features into numerical ones
 featr = ['PassengerId','Survived','Age','PerFare',\
          'Ch12','Ch3','Fem12','Fem3wCh','Fem3r','Male1wSp','Male1r','Male2','Male3isAlwSib','Male3r']
@@ -202,19 +206,32 @@ cat_df_test = all_df.iloc[891:,:].apply(lambda s: get_category(s) ,axis = 1)
 
 # Baseline Model
 def get_survived(row):
-    if (row['Male1wSp'] == 1)|(row['Male1r'] == 1)|(row['Male2'] == 1)|(row['Male3isAlwSib'] == 1)|(row['Male3r'] == 1)\
-        |(row['Ch3'] == 1)|(row['Fem3wCh'] == 1):
-        survived = 0
-    else:
+    if (row['Fem12'] == 1)|(row['Ch12'] == 1)|(row['Fem3r'] == 1)|(row['Fem3wCh'] == 1):
         survived = 1
+    else:
+        survived = 0
+
+    return survived
+
+def get_survived_s(row):
+    if (row['Pclass'] == 1)|(row['Pclass'] == 2):
+        if row['Title'] == 'Mr':
+            survived = 0
+        else:
+            survived = 1
+    else:
+        if row['Sex'] == 'female' and not ((row['Parch'] != 0) and (row['Title'] == 'Miss')):
+            survived = 1
+        else:
+            survived = 0
 
     return survived
 
 pred_df_train = pd.DataFrame( {'PassengerId': train_df['PassengerId'], 'Survived': 0} )
 pred_df_test = pd.DataFrame( {'PassengerId': test_df['PassengerId'], 'Survived': 0} )
 
-pred_df_train['Survived'] = cat_df_train.apply(lambda s: get_survived(s), axis = 1)
-pred_df_test['Survived'] = cat_df_test.apply(lambda s: get_survived(s), axis = 1)
+pred_df_train['Survived'] = df_train.apply(lambda s: get_survived_s(s), axis = 1)
+pred_df_test['Survived'] = df_test.apply(lambda s: get_survived_s(s), axis = 1)
 
 score = metrics.accuracy_score(pred_df_train['Survived'], train_df['Survived'])
 print('Accuracy: {}'.format(score))
