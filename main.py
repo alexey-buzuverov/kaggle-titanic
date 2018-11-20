@@ -200,33 +200,24 @@ def get_category(row):
 cat_df_train = all_df.iloc[:891,:].apply(lambda s: get_category(s) ,axis = 1)
 cat_df_test = all_df.iloc[891:,:].apply(lambda s: get_category(s) ,axis = 1)
 
-# Apply Logistic regression to each category
-pred_df_test = pd.DataFrame( {"PassengerId": test_df["PassengerId"], "Survived": 0} )
-score = 0
-for cat in ['Ch12','Ch3','Fem12','Fem3wCh','Fem3r','Male1wSp','Male1r','Male2','Male3isAlwSib','Male3r']:
-    X_train = cat_df_train[cat_df_train[cat] == 1][['Age','PerFare']]
-    X_test = cat_df_test[cat_df_test[cat] == 1][['PassengerId', 'Age', 'PerFare']]
-    X_test_id = X_test['PassengerId'].values
-    X_test = X_test.drop('PassengerId', axis = 1)
-    if (X_train['Age'] == 0).all():
-        X_train = X_train.drop('Age', axis = 1)
-        X_test = X_test.drop('Age', axis=1)
-    elif (X_train['PerFare'] == 0).all():
-        X_train = X_train.drop('PerFare', axis=1)
-        X_test = X_test.drop('PerFare', axis=1)
-    y_train = cat_df_train[cat_df_train[cat] == 1]['Survived']
-    alg_svm = SVC()
-    alg_svm.fit(X_train, y_train)
-    pred_train = alg_svm.predict(X_train)
-    pred_test = alg_svm.predict(X_test)
-    score = score + metrics.accuracy_score(y_train, pred_train)
-    sub_test = pd.DataFrame({"PassengerId": X_test_id, "Survived": pred_test})
-    pred_df_test['Survived'] = \
-        pred_df_test.apply(lambda s: sub_test[sub_test['PassengerId'] == s['PassengerId']]['Survived'].values[0] \
-        if s['PassengerId'] in X_test_id else s['Survived'], axis = 1)
+# Baseline Model
+def get_survived(row):
+    if (row['Male1wSp'] == 1)|(row['Male1r'] == 1)|(row['Male2'] == 1)|(row['Male3isAlwSib'] == 1)|(row['Male3r'] == 1)\
+        |(row['Ch3'] == 1)|(row['Fem3wCh'] == 1):
+        survived = 0
+    else:
+        survived = 1
 
-print(score/10)
+    return survived
 
+pred_df_train = pd.DataFrame( {'PassengerId': train_df['PassengerId'], 'Survived': 0} )
+pred_df_test = pd.DataFrame( {'PassengerId': test_df['PassengerId'], 'Survived': 0} )
+
+pred_df_train['Survived'] = cat_df_train.apply(lambda s: get_survived(s), axis = 1)
+pred_df_test['Survived'] = cat_df_test.apply(lambda s: get_survived(s), axis = 1)
+
+score = metrics.accuracy_score(pred_df_train['Survived'], train_df['Survived'])
+print('Accuracy: {}'.format(score))
 # Submission
 pred_df_test.to_csv('submission.csv', index=False)
 
