@@ -9,7 +9,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.tree import DecisionTreeClassifier
+from sklearn.tree import DecisionTreeClassifier, export_graphviz
 from sklearn.model_selection import StratifiedKFold, RepeatedStratifiedKFold, KFold, cross_val_score, GridSearchCV
 from sklearn.feature_selection import SelectKBest, f_classif
 import numpy as np
@@ -173,18 +173,40 @@ scaler = StandardScaler()
 scaler.fit(X_train[['Age','PerFare']])
 X_train[['Age','PerFare']] = scaler.transform(X_train[['Age','PerFare']])
 X_test[['Age','PerFare']] = scaler.transform(X_test[['Age','PerFare']])
+predictors = list(X_train.columns.values)
 
 # Feature importance
 # selector = SelectKBest(f_classif, k=10)
 # selector.fit(X_train, y_train)
 # scores = -np.log10(selector.pvalues_)
-# predictors = list(X_train.columns.values)
 # plt.bar(range(len(predictors)), scores)
 # plt.xticks(range(len(predictors)), predictors, rotation='vertical')
 # plt.show()
 
 # Cross-validation parameters
 cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=10, random_state=1)
+
+# Logistic Regression
+lr_grid = {'C': list(np.linspace(0.1,1,10))}
+lr_search = GridSearchCV(estimator = LogisticRegression(), param_grid = lr_grid, scoring = 'roc_auc',
+               cv = cv, refit=True, n_jobs=1)
+# lr_search.fit(X_train, y_train)
+# lr_best = lr_search.best_estimator_
+# print("Accuracy: {}, std: {}, with params {}"
+#       .format(lr_search.best_score_, lr_search.cv_results_['std_test_score'][lr_search.best_index_],
+#               lr_search.best_params_))
+
+# Decision Tree
+dt_grid = {'max_depth': list(range(2,10)), 'min_samples_split': list(range(2,10)),
+           'min_samples_leaf': list(range(2,10))}
+dt_search = GridSearchCV(estimator = DecisionTreeClassifier(), param_grid = dt_grid, scoring = 'roc_auc',
+               cv = cv, refit=True, n_jobs=1)
+dt_search.fit(X_train, y_train)
+dt_best = dt_search.best_estimator_
+print("Accuracy: {}, std: {}, with params {}"
+      .format(dt_search.best_score_, dt_search.cv_results_['std_test_score'][dt_search.best_index_],
+              dt_search.best_params_))
+export_graphviz(dt_best, out_file = 'tree.dot', feature_names = predictors)
 
 # Support Vector Classifier
 svm_grid = {'C': list(range(1,10))}
@@ -199,12 +221,12 @@ knn_grid = {'algorithm': ['auto'], 'weights': ['uniform', 'distance'], 'leaf_siz
                'metric': ['minkowski'], 'n_neighbors': list(range(2,6))}
 knn_search = GridSearchCV(estimator = KNeighborsClassifier(), param_grid = knn_grid, scoring = 'roc_auc',
                 cv=cv, refit=True, n_jobs=1)
-knn_search.fit(X_train, y_train)
-knn_best = knn_search.best_estimator_
-print("Accuracy: {} with params {}".format(knn_search.best_score_, knn_search.best_params_))
+# knn_search.fit(X_train, y_train)
+# knn_best = knn_search.best_estimator_
+# print("Accuracy: {} with params {}".format(knn_search.best_score_, knn_search.best_params_))
 
 # Fit, predict and generate submission
-predictions = knn_best.predict(X_test)
+predictions = dt_best.predict(X_test)
 submission = pd.DataFrame({
     "PassengerId": X_test_Id,
     "Survived": predictions.astype(int)
