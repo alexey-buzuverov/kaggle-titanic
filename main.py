@@ -214,16 +214,21 @@ def get_survived(row):
     return survived
 
 def get_survived_s(row):
-    if (row['Pclass'] == 1)|(row['Pclass'] == 2):
+    if row['Pclass'] == 1:
+        if row['Title'] == 'Mr':
+            survived = 0
+        else:
+            survived = 1
+    elif row['Pclass'] == 2:
         if row['Title'] == 'Mr':
             survived = 0
         else:
             survived = 1
     else:
-        if row['Sex'] == 'female' and not ((row['Parch'] != 0) and (row['Title'] == 'Miss')):
-            survived = 1
-        else:
+        if (row['Title'] == 'Mr' or row['Embarked'] == 'S') and not (row['Title'] == 'Mrs' and row['wCh'] == 0):
             survived = 0
+        else:
+            survived = 1
 
     return survived
 
