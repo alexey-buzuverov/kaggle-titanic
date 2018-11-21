@@ -225,7 +225,7 @@ def get_survived_s(row):
         else:
             survived = 1
     else:
-        if (row['Title'] == 'Mr' or row['Embarked'] == 'S') and not (row['Title'] == 'Mrs' and row['wCh'] == 0):
+        if row['Title'] == 'Mr' or row['FamSize'] > 4 or (row['Title'] == 'Miss' and row['Embarked'] == 'S'):
             survived = 0
         else:
             survived = 1
