@@ -151,6 +151,9 @@ all_df.loc[all_df['PassengerId'] == 1231,'Age'] = \
 # Fill Embarked
 all_df['Embarked'].fillna(all_df['Embarked'].value_counts().index[0], inplace=True)
 
+# Make FamSize bins
+all_df['FamSize'] = pd.cut(all_df['FamSize'], bins = [0,1,4,11], labels = False)
+
 # Form train and test sets
 df_train = all_df.iloc[:891,:]
 df_test = all_df.iloc[891:,:]
@@ -225,7 +228,8 @@ def get_survived_s(row):
         else:
             survived = 1
     else:
-        if row['Title'] == 'Mr' or row['FamSize'] > 4 or (row['Title'] == 'Miss' and row['Embarked'] == 'S'):
+        if row['Title'] == 'Mr' or row['FamSize'] > 1 or \
+                (row['Sex'] == 'female' and row['Embarked'] == 'S' and (row['isAlone'] == 1 or row['wSib'] == 1)):
             survived = 0
         else:
             survived = 1
@@ -261,12 +265,13 @@ pred_df_test.to_csv('submission.csv', index=False)
 # all_df[(all_df['SibSp'] == 0) & (all_df['Parch'] == 2)].to_csv('test_0_2.csv')
 # all_df.groupby(['Pclass','Title','isAlone','wSibSp','wCh','wPar'])['Age'].agg(['count','median'])
 # all_df.groupby(['Pclass','Title','isAlone','wSibSp','wCh','wPar'])['Survived'].describe()
-# all_df.groupby(['Pclass','Title','isAlone','wSib','wSp','wCh','wPar'])['Survived'].agg(['count','mean'])
+# all_df[all_df['Pclass'] == 3].groupby(['Title'])['Survived'].agg(['count','size','mean'])
 # all_df.groupby(['Pclass','Title','isAlone','wSib','wSp','wCh','wPar','Survived'])['Age'].agg(['count','mean'])
 
-# xs = all_df[(all_df['Title'] != 'Mr') & (all_df['Pclass'] == 3) & (all_df['wPar'] == 1)]
-# markers = ('x', 'o')
-# colors = ('black', 'black')
-# for idx in [0,1]:
-#     plt.scatter(xs[xs['Survived'] == idx].Age, xs[xs['Survived'] == idx].PerFare, \
-#                 alpha = 0.5, c = colors[idx], marker = markers[idx], label = idx)
+xs = all_df[(all_df['Sex'] == 'female') & (all_df['Pclass'] == 3) & \
+            (all_df['FamSize'] < 2) & (all_df['Embarked'] == 'S')]
+markers = ('x', 'o')
+colors = ('black', 'black')
+for idx in [0,1]:
+    plt.scatter(xs[xs['Survived'] == idx].Age, xs[xs['Survived'] == idx].PerFare, \
+                alpha = 0.5, c = colors[idx], marker = markers[idx], label = idx)
