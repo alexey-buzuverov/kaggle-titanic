@@ -153,12 +153,13 @@ all_df['Embarked'].fillna(all_df['Embarked'].value_counts().index[0], inplace=Tr
 
 # Select and convert categorial features into numerical ones
 all_df['Sex'] = all_df['Sex'].map( {'male': 0, 'female': 1} ).astype(int)
+all_df['isAlwSib'] = all_df.apply(lambda s: 1 if (s['isAlone'] == 1)|(s['wSib'] == 1) else 0 ,axis = 1)
 all_df[['Age','PerFare']] = all_df[['Age','PerFare']].astype(int)
 all_df['FamSize'] = pd.cut(all_df['FamSize'], bins=[0,4,11], labels = False).astype(int)
 all_df_dummies =  pd.get_dummies(all_df, columns = ['Title','Pclass','FamSize','Embarked'],\
                                  prefix=['Title','Pclass','FamSize','Embarked'])
 
-featr_drop = ['Sex','Fname','Name','Deck','Cabin','Ticket','Fare','SibSp','Parch','GrSize']
+featr_drop = ['Sex','Fname','Name','Deck','Cabin','Ticket','Fare','PerFare','SibSp','Parch','GrSize','isAlone','wSib']
 all_df_dummies = all_df_dummies.drop(featr_drop, axis = 1)
 
 # Form train and test sets
