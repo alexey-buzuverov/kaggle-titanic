@@ -34,11 +34,13 @@ corr_dict = {248: pd.Series([0,1], index=['SibSp', 'Parch'],),
              1041: pd.Series([1,0], index=['SibSp', 'Parch'],),
              1130: pd.Series([0,0], index=['SibSp', 'Parch'],),
              1170: pd.Series([2,0], index=['SibSp', 'Parch'],),
-             1254: pd.Series([1,0], index=['SibSp', 'Parch'],)
+             1254: pd.Series([1,0], index=['SibSp', 'Parch'],),
+             1274: pd.Series([1,0], index=['SibSp', 'Parch'],),
+             539: pd.Series([1,0], index=['SibSp', 'Parch'],)
              }
 
 all_df[['SibSp','Parch']] = all_df.apply(lambda s: corr_dict[s['PassengerId']]
-    if s['PassengerId'] in [248,313,418,756,1041,1130,1170,1254] else s[['SibSp','Parch']], axis = 1)
+    if s['PassengerId'] in [248,313,418,756,1041,1130,1170,1254,1274,539] else s[['SibSp','Parch']], axis = 1)
 
 # Add Title
 all_df.insert(3,'Title','')
@@ -77,6 +79,7 @@ all_df.insert(12,'wSib',0)
 all_df.insert(13,'wSp',0)
 all_df.insert(14,'wCh',0)
 all_df.insert(15,'wPar',0)
+
 # Fill new features
 
 # Search for passengers with siblings
@@ -139,20 +142,26 @@ all_df['PerFare'] = all_df.apply(lambda s: perfare_medians.loc[s['Pclass']]
 all_df['Fare'] = all_df.apply(lambda s: s['PerFare']*s['GrSize']
     if s['Fare'] == 0.0 else s['Fare'], axis = 1)
 
+# Make Group Size bins
+all_df['GrSize'] = pd.cut(all_df['GrSize'], bins = [0,1,4,11], labels = False)
+
+# Make FamSize bins
+all_df['FamSize'] = pd.cut(all_df['FamSize'], bins = [0,1,4,11], labels = False)
+
 # Fill Age
-age_medians = all_df.groupby(['Pclass','Title','isAlone','wSib','wSp','wCh','wPar'])['Age'].median()
+age_medians = all_df.groupby(['Pclass','Title','isAlone','wSib','wSp','wCh','wPar','GrSize'])['Age'].median()
 all_df['Age'] = all_df.apply(lambda s:
     age_medians.loc[s['Pclass']].loc[s['Title']].loc[s['isAlone']].loc[s['wSib']]. \
-                                 loc[s['wSp']].loc[s['wCh']].loc[s['wPar']]
+                                 loc[s['wSp']].loc[s['wCh']].loc[s['wPar']].loc[s['GrSize']]
     if pd.isnull(s['Age']) else s['Age'], axis=1)
 all_df.loc[all_df['PassengerId'] == 1231,'Age'] = \
-    age_medians.loc[3].loc['Master'].loc[0].loc[0].loc[0].loc[0].loc[1]
+    age_medians.loc[3].loc['Master'].loc[0].loc[0].loc[0].loc[0].loc[1].loc[1]
 
 # Fill Embarked
 all_df['Embarked'].fillna(all_df['Embarked'].value_counts().index[0], inplace=True)
 
-# Make FamSize bins
-all_df['FamSize'] = pd.cut(all_df['FamSize'], bins = [0,1,4,11], labels = False)
+# Merge isAlone and wSib
+all_df['isAlwSib'] = all_df.apply(lambda s: 1 if (s['isAlone'] == 1)|(s['wSib'] == 1) else 0 ,axis = 1)
 
 # Form train and test sets
 df_train = all_df.iloc[:891,:]
@@ -229,7 +238,8 @@ def get_survived_s(row):
             survived = 1
     else:
         if row['Title'] == 'Mr' or row['FamSize'] > 1 or \
-                (row['Sex'] == 'female' and row['Embarked'] == 'S' and (row['isAlone'] == 1 or row['wSib'] == 1)):
+                (row['Title'] == 'Miss' and row['Embarked'] == 'S' and row['wPar'] == 0) or \
+                (row['Title'] == 'Miss' and row['wPar'] == 1 and row['Age'] > 7):
             survived = 0
         else:
             survived = 1
@@ -268,10 +278,10 @@ pred_df_test.to_csv('submission.csv', index=False)
 # all_df[all_df['Pclass'] == 3].groupby(['Title'])['Survived'].agg(['count','size','mean'])
 # all_df.groupby(['Pclass','Title','isAlone','wSib','wSp','wCh','wPar','Survived'])['Age'].agg(['count','mean'])
 
-xs = all_df[(all_df['Sex'] == 'female') & (all_df['Pclass'] == 3) & \
-            (all_df['FamSize'] < 2) & (all_df['Embarked'] == 'S')]
-markers = ('x', 'o')
-colors = ('black', 'black')
-for idx in [0,1]:
-    plt.scatter(xs[xs['Survived'] == idx].Age, xs[xs['Survived'] == idx].PerFare, \
-                alpha = 0.5, c = colors[idx], marker = markers[idx], label = idx)
+# xs = all_df[(all_df['Title'] == 'Miss') & (all_df['Pclass'] == 3) & \
+#             (all_df['FamSize'] < 2) & (all_df['wPar'] == 1) ]
+# markers = ('x', 'o')
+# colors = ('black', 'black')
+# for idx in [0,1]:
+#     plt.scatter(xs[xs['Survived'] == idx].Age, xs[xs['Survived'] == idx].PerFare, \
+#                 alpha = 0.5, c = colors[idx], marker = markers[idx], label = idx)
