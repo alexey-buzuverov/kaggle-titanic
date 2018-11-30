@@ -146,7 +146,7 @@ all_df['Fare'] = all_df.apply(lambda s: s['PerFare']*s['GrSize']
 all_df['GrSize'] = pd.cut(all_df['GrSize'], bins = [0,1,4,11], labels = False)
 
 # Make FamSize bins
-all_df['FamSize'] = pd.cut(all_df['FamSize'], bins = [0,1,4,11], labels = False)
+all_df['FamSize'] = pd.cut(all_df['FamSize'], bins = [0,4,11], labels = False)
 
 # Fill Age
 age_medians = all_df.groupby(['Pclass','Title','isAlone','wSib','wSp','wCh','wPar','GrSize'])['Age'].median()
@@ -228,7 +228,10 @@ def get_survived(row):
 def get_survived_s(row):
     if row['Pclass'] == 1:
         if row['Title'] == 'Mr':
-            survived = 0
+            if row['Deck'] == 'E':
+                survived = 1
+            else:
+                survived = 0
         else:
             survived = 1
     elif row['Pclass'] == 2:
@@ -237,9 +240,8 @@ def get_survived_s(row):
         else:
             survived = 1
     else:
-        if row['Title'] == 'Mr' or row['FamSize'] > 1 or \
-                (row['Title'] == 'Miss' and row['Embarked'] == 'S' and row['wPar'] == 0) or \
-                (row['Title'] == 'Miss' and row['wPar'] == 1 and row['Age'] > 7):
+        if row['Title'] == 'Mr' or row['FamSize'] > 0 or \
+                (row['Title'] == 'Miss' and row['Embarked'] == 'S'):
             survived = 0
         else:
             survived = 1
@@ -277,6 +279,8 @@ pred_df_test.to_csv('submission.csv', index=False)
 # all_df.groupby(['Pclass','Title','isAlone','wSibSp','wCh','wPar'])['Survived'].describe()
 # all_df[all_df['Pclass'] == 3].groupby(['Title'])['Survived'].agg(['count','size','mean'])
 # all_df.groupby(['Pclass','Title','isAlone','wSib','wSp','wCh','wPar','Survived'])['Age'].agg(['count','mean'])
+# all_df[all_df['Pclass'] == 1].groupby(['Title','wSp','FamSize','Deck'])['Survived'].agg(['count','size','mean'])
+# print(all_df[all_df['Pclass'] == 1].groupby(['Title','FamSize','Deck'])['Survived'].agg(['count','size','mean']))
 
 # xs = all_df[(all_df['Title'] == 'Miss') & (all_df['Pclass'] == 3) & \
 #             (all_df['FamSize'] < 2) & (all_df['wPar'] == 1) ]
