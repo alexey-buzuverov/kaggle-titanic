@@ -16,7 +16,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import warnings
-warnings.filterwarnings("ignore", category=DeprecationWarning)
+from fancyimpute import KNN
+from fancyimpute import IterativeImputer
+pd.options.mode.chained_assignment = None
+import warnings
+warnings.filterwarnings('ignore')
 
 # Load data
 train_df = pd.read_csv('C:/Users/Alexey/Documents/Python/Kaggle-Titanik/input/train.csv', header=0)
@@ -35,8 +39,8 @@ corr_dict = {248: pd.Series([0,1], index=['SibSp', 'Parch']),
              1130: pd.Series([0,0], index=['SibSp', 'Parch']),
              1170: pd.Series([2,0], index=['SibSp', 'Parch']),
              1254: pd.Series([1,0], index=['SibSp', 'Parch']),
-             1274: pd.Series([1, 0], index=['SibSp', 'Parch']),
-             539: pd.Series([1, 0], index=['SibSp', 'Parch'])
+             1274: pd.Series([1,0], index=['SibSp', 'Parch']),
+             539: pd.Series([1,0], index=['SibSp', 'Parch']),
              }
 
 all_df[['SibSp','Parch']] = all_df.apply(lambda s: corr_dict[s['PassengerId']]
@@ -59,6 +63,7 @@ all_df['Cabin'].fillna('U',inplace=True)
 # Add Deck
 all_df.insert(11,'Deck','')
 all_df['Deck'] =  all_df['Cabin'].map(lambda s: s[0])
+all_df['Deck'] = all_df.apply(lambda s: 0 if s['Deck'] == 'U' else 1,axis = 1)
 
 # Add Family Size
 all_df.insert(9,'FamSize','')
@@ -129,56 +134,39 @@ def get_features(row):
 
 all_df[['isAlone','wSib','wSp','wCh','wPar']] = all_df.apply(lambda s: get_features(s), axis = 1)
 
-# Add Per Person Fare
-all_df.insert(15,'PerFare','')
-all_df['Fare'].fillna(0.0, inplace=True)
-all_df['PerFare'] = all_df.apply(lambda s: s['Fare']/s['GrSize'], axis=1)
-
-# Fill Fare
-perfare_medians = all_df.groupby(['Pclass'])['PerFare'].median()
-all_df['PerFare'] = all_df.apply(lambda s: perfare_medians.loc[s['Pclass']]
-    if s['PerFare'] == 0.0 else s['PerFare'], axis=1)
-all_df['Fare'] = all_df.apply(lambda s: s['PerFare']*s['GrSize']
-    if s['Fare'] == 0.0 else s['Fare'], axis = 1)
-
-# Make Group Size bins
-all_df['GrSize'] = pd.cut(all_df['GrSize'], bins = [0,1,4,11], labels = False)
-
-# Make Family Size bins
-all_df['FamSize'] = pd.cut(all_df['FamSize'], bins = [0,4,11], labels = False)
-
-# Fill Age
-age_medians = all_df.groupby(['Pclass','Title','isAlone','wSib','wSp','wCh','wPar','GrSize'])['Age'].median()
-all_df['Age'] = all_df.apply(lambda s:
-    age_medians.loc[s['Pclass']].loc[s['Title']].loc[s['isAlone']].loc[s['wSib']]. \
-                                 loc[s['wSp']].loc[s['wCh']].loc[s['wPar']].loc[s['GrSize']]
-    if pd.isnull(s['Age']) else s['Age'], axis=1)
-all_df.loc[all_df['PassengerId'] == 1231,'Age'] = \
-    age_medians.loc[3].loc['Master'].loc[0].loc[0].loc[0].loc[0].loc[1].loc[1]
-
-# Select and convert categorial features into numerical ones
+# Select and convert categorial features into numerical ones (1)
 all_df['Sex'] = all_df['Sex'].map( {'male': 0, 'female': 1} ).astype(int)
-all_df['isAlwSib'] = all_df.apply(lambda s: 1 if (s['isAlone'] == 1)|(s['wSib'] == 1) else 0 ,axis = 1)
-# all_df[['Age','PerFare']] = all_df[['Age','PerFare']].astype(int)
-all_df_dummies =  pd.get_dummies(all_df, columns = ['Title','Pclass','FamSize','Embarked'],\
-                                 prefix=['Title','Pclass','FamSize','Embarked'])
-
-featr_drop = ['Sex','Fname','Name','Deck','Cabin','Ticket','Fare','PerFare',
-              'SibSp','Parch','GrSize','isAlone','wSib']
+all_df_dummies =  pd.get_dummies(all_df, columns = ['Title','Pclass','Embarked'],\
+                                 prefix=['Title','Pclass','Embarked'])
+featr_drop = ['Fname','Name','Cabin','Ticket','Fare','PassengerId','Survived','SibSp','Parch']
 all_df_dummies = all_df_dummies.drop(featr_drop, axis = 1)
 
+# KNN imputation
+all_df_dummies_i = pd.DataFrame(data=KNN(k=3, verbose = False).fit_transform(all_df_dummies).astype(int),
+                            columns=all_df_dummies.columns, index=all_df_dummies.index)
+
+# Convert categorial features into numerical ones (2)
+all_df_dummies_i['FamSize'] = pd.cut(all_df_dummies_i['FamSize'], bins = [0,4,11], labels = False)
+all_df_dummies_i['isAlwSib'] = \
+    all_df_dummies_i.apply(lambda s: 1 if (s['isAlone'] == 1)|(s['wSib'] == 1) else 0 ,axis = 1)
+# all_df_dummies_i['wSpwCh'] = \
+#     all_df_dummies_i.apply(lambda s: 1 if (s['wSp'] == 1)|(s['wCh'] == 1) else 0 ,axis = 1)
+# all_df_dummies_i =  pd.get_dummies(all_df_dummies_i, columns = ['wSp','wCh','wPar','isAlwSib','FamSize','Deck'],\
+#                                 prefix=['wSp','wCh','wPar','isAlwSib','FamSize','Deck'])
+all_df_dummies_i = all_df_dummies_i.drop(['Sex','isAlone','wSib','GrSize'], axis = 1)
+
 # Form train and test sets
-X_train = all_df_dummies.iloc[:891,:].drop(['PassengerId','Survived'], axis = 1)
-y_train = all_df_dummies.iloc[:891,:]['Survived']
-X_test = all_df_dummies.iloc[891:,:].drop(['PassengerId','Survived'], axis = 1)
-X_test_Id = all_df_dummies.iloc[891:,:]['PassengerId']
-# X_train.to_csv('train.csv')
+X_train = all_df_dummies_i.iloc[:891,:]
+y_train = all_df.iloc[:891,:]['Survived']
+X_test = all_df_dummies_i.iloc[891:,:]
+X_test_Id = all_df.iloc[891:,:]['PassengerId']
+X_train.to_csv('train.csv')
 
 # Perform scaling
 scaler = StandardScaler()
 scaler.fit(X_train[['Age']])
-X_train[['Age']] = scaler.transform(X_train[['Age']])
-X_test[['Age']] = scaler.transform(X_test[['Age']])
+X_train['Age'] = scaler.transform(X_train[['Age']])
+X_test['Age'] = scaler.transform(X_test[['Age']])
 predictors = list(X_train.columns.values)
 
 # Feature importance
@@ -193,33 +181,34 @@ predictors = list(X_train.columns.values)
 cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=10, random_state=1)
 
 # Logistic Regression
-lr_grid = {'C': list(np.linspace(0.1,1,10))}
-lr_search = GridSearchCV(estimator = LogisticRegression(), param_grid = lr_grid, scoring = 'roc_auc',
+lr_grid = {'C': list(np.linspace(0.1,2,20))}
+lr_search = GridSearchCV(estimator = LogisticRegression(), param_grid = lr_grid,
                cv = cv, refit=True, n_jobs=1)
 # lr_search.fit(X_train, y_train)
 # lr_best = lr_search.best_estimator_
-# print("Accuracy: {}, std: {}, with params {}"
+# print("Accuracy CV: {}, std: {}, with params {}"
 #       .format(lr_search.best_score_, lr_search.cv_results_['std_test_score'][lr_search.best_index_],
 #               lr_search.best_params_))
 
 # Support Vector Classifier
-svm_grid = {'C': list(range(1,10))}
-svm_search = GridSearchCV(estimator = SVC(), param_grid = svm_grid, scoring = 'roc_auc',
+svm_grid = {'C': [10,11,12,13,14,15,16,17,18,19,20], 'gamma': ['auto']}
+# svm_grid = {'C': [12], 'gamma': ['auto']}
+svm_search = GridSearchCV(estimator = SVC(), param_grid = svm_grid,
                cv = cv, refit=True, n_jobs=1)
-# svm_search.fit(X_train, y_train)
-# svm_best = svm_search.best_estimator_
-# print("Accuracy: {}, std: {}, with params {}"
-#        .format(svm_search.best_score_, svm_search.cv_results_['std_test_score'][svm_search.best_index_],
-#                svm_search.best_params_))
+svm_search.fit(X_train, y_train)
+svm_best = svm_search.best_estimator_
+print("Accuracy CV: {}, std: {}, with params {}"
+       .format(svm_search.best_score_, svm_search.cv_results_['std_test_score'][svm_search.best_index_],
+               svm_search.best_params_))
 
 # K-nearest Neighbors
 knn_grid = {'algorithm': ['auto'], 'weights': ['uniform', 'distance'], 'leaf_size': list(range(1,50,5)),
                'metric': ['minkowski'], 'n_neighbors': list(range(2,6))}
-knn_search = GridSearchCV(estimator = KNeighborsClassifier(), param_grid = knn_grid, scoring = 'roc_auc',
+knn_search = GridSearchCV(estimator = KNeighborsClassifier(), param_grid = knn_grid,
                 cv=cv, refit=True, n_jobs=1)
 # knn_search.fit(X_train, y_train)
 # knn_best = knn_search.best_estimator_
-# print("Accuracy: {}, std: {}, with params {}"
+# print("Accuracy CV: {}, std: {}, with params {}"
 #        .format(knn_search.best_score_, knn_search.cv_results_['std_test_score'][knn_search.best_index_],
 #                knn_search.best_params_))
 
@@ -230,47 +219,63 @@ dt_search = GridSearchCV(estimator = DecisionTreeClassifier(), param_grid = dt_g
                cv = cv, refit=True, n_jobs=1)
 # dt_search.fit(X_train, y_train)
 # dt_best = dt_search.best_estimator_
-# print("Accuracy: {}, std: {}, with params {}"
+# print("Accuracy CV: {}, std: {}, with params {}"
 #       .format(dt_search.best_score_, dt_search.cv_results_['std_test_score'][dt_search.best_index_],
 #               dt_search.best_params_))
 # export_graphviz(dt_best, out_file = 'tree.dot', feature_names = predictors)
 
 # Random Forest
-# rf_grid = {'n_estimators': [50,100,200,250],
-#            'max_depth': [4,8,12],
-#            'min_samples_split': [4,8,12],
-#            'min_samples_leaf': [4,8,12]}
-rf_grid = {'n_estimators': [200],
-            'max_depth': [8],
-            'min_samples_split': [8],
-            'min_samples_leaf': [8]}
-rf_search = GridSearchCV(estimator = RandomForestClassifier(), param_grid = rf_grid, scoring = 'roc_auc',
+rf_grid = {'n_estimators': [1000],
+           'max_depth': [8],
+           'min_samples_split': [10],
+           'min_samples_leaf': [6]}
+# rf_grid = {'n_estimators': [1000],
+#             'max_depth': [12],
+#             'min_samples_split': [8,10,12],
+#             'min_samples_leaf': [4,6]}
+rf_search = GridSearchCV(estimator = RandomForestClassifier(), param_grid = rf_grid,
                cv = cv, refit=True, n_jobs=1)
-rf_search.fit(X_train, y_train)
-rf_best = rf_search.best_estimator_
-print("Accuracy: {}, std: {}, with params {}"
-       .format(rf_search.best_score_, rf_search.cv_results_['std_test_score'][rf_search.best_index_],
-               rf_search.best_params_))
+# rf_search.fit(X_train, y_train)
+# rf_best = rf_search.best_estimator_
+# print("Accuracy CV: {}, std: {}, with params {}"
+#        .format(rf_search.best_score_, rf_search.cv_results_['std_test_score'][rf_search.best_index_],
+#                rf_search.best_params_))
+
+# Random Forest feature importance
+# rf_importances = rf_best.feature_importances_
+# plt.bar(range(len(rf_importances)), rf_importances)
+# plt.xticks(range(len(rf_importances)), predictors, rotation='vertical')
+# plt.show()
 
 # Tree-based Gradient Boosting
-xgb_grid = {'n_estimators': [150, 200, 250],
-            'max_depth': [1, 2, 3, 4],
-            'learning_rate': [0.02, 0.05, 0.1]}
+xgb_grid = {'n_estimators': [30],
+            'learning_rate': [0.1],
+            'max_depth': [3],
+            'min_child_weight': [5],
+            'gamma': [0],
+            'subsample': [0.9],
+            'colsample_bytree': [0.9],
+            'reg_alpha':[0.01]}
 xgb_search = GridSearchCV(estimator = xgb.XGBClassifier(), param_grid = xgb_grid, scoring = 'roc_auc',
                cv = cv, refit=True, n_jobs=1)
 # xgb_search.fit(X_train, y_train)
 # xgb_best = xgb_search.best_estimator_
-# print("Accuracy: {}, std: {}, with params {}"
+# print("Accuracy CV: {}, std: {}, with params {}"
 #        .format(xgb_search.best_score_, xgb_search.cv_results_['std_test_score'][xgb_search.best_index_],
 #                xgb_search.best_params_))
 
 # Fit, predict and generate submission
-predictions = rf_best.predict(X_test)
+alg_best = svm_best
+predictions_train = alg_best.predict(X_train)
+print('Accuracy Train: {}'
+        .format(metrics.accuracy_score(y_train, predictions_train)))
+
+predictions_test = alg_best.predict(X_test)
 submission = pd.DataFrame({
-    "PassengerId": X_test_Id,
-    "Survived": predictions.astype(int)
+    'PassengerId': X_test_Id,
+    'Survived': predictions_test.astype(int)
 })
-submission.to_csv("submission.csv", index=False)
+submission.to_csv('submission.csv', index=False)
 
 # Test routine
 # g = sns.FacetGrid(all_df[all_df['FamSize'] == 2], col='Parch')
