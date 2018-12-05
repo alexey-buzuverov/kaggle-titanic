@@ -228,9 +228,9 @@ def get_survived(row):
 def get_survived_s(row):
     if row['Pclass'] == 1:
         if row['Title'] == 'Mr':
-            if row['Deck'] == 'E':
-                survived = 1
-            else:
+            # if row['Deck'] == 'E':
+            #    survived = 1
+            #else:
                 survived = 0
         else:
             survived = 1
@@ -241,7 +241,7 @@ def get_survived_s(row):
             survived = 1
     else:
         if row['Title'] == 'Mr' or row['FamSize'] > 0 or \
-                (row['Title'] == 'Miss' and row['Embarked'] == 'S'):
+                (row['Title'] == 'Miss' and row['Embarked'] == 'S' and row['Age'] > 17):
             survived = 0
         else:
             survived = 1
@@ -283,7 +283,7 @@ pred_df_test.to_csv('submission.csv', index=False)
 # print(all_df[all_df['Pclass'] == 1].groupby(['Title','FamSize','Deck'])['Survived'].agg(['count','size','mean']))
 
 # xs = all_df[(all_df['Title'] == 'Miss') & (all_df['Pclass'] == 3) & \
-#             (all_df['FamSize'] < 2) & (all_df['wPar'] == 1) ]
+#             (all_df['FamSize'] == 0) ]
 # markers = ('x', 'o')
 # colors = ('black', 'black')
 # for idx in [0,1]:
