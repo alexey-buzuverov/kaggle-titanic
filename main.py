@@ -137,7 +137,7 @@ all_df[['isAlone','wSib','wSp','wCh','wPar']] = all_df.apply(lambda s: get_featu
 # Select and convert categorial features into numerical ones (1)
 all_df['Sex'] = all_df['Sex'].map( {'male': 0, 'female': 1} ).astype(int)
 all_df_dummies =  pd.get_dummies(all_df, columns = ['Title','Pclass','Embarked'],\
-                                 prefix=['Title','Pclass','Embarked'])
+                                 prefix=['Title','Pclass','Embarked'], drop_first = True)
 featr_drop = ['Fname','Name','Cabin','Ticket','Fare','PassengerId','Survived','SibSp','Parch']
 all_df_dummies = all_df_dummies.drop(featr_drop, axis = 1)
 
@@ -191,7 +191,7 @@ lr_search = GridSearchCV(estimator = LogisticRegression(), param_grid = lr_grid,
 #               lr_search.best_params_))
 
 # Support Vector Classifier
-svm_grid = {'C': [10,11,12,13,14,15,16,17,18,19,20], 'gamma': ['auto']}
+svm_grid = {'C': [10], 'gamma': ['auto']}
 # svm_grid = {'C': [12], 'gamma': ['auto']}
 svm_search = GridSearchCV(estimator = SVC(), param_grid = svm_grid,
                cv = cv, refit=True, n_jobs=1)
